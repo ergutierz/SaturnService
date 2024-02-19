@@ -1,6 +1,6 @@
 namespace SaturnService;
 
-public interface SportsService
+public interface ISportsService
 {
     Task<string> FetchTeamDataAsync(int teamNumber);
 }
