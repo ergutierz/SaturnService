@@ -28,6 +28,13 @@ SaturnService is a web communication solution designed to fetch and process NFL 
 3. **Clean and Flexible Design**: Utilizes object-oriented design (OOD) principles to achieve a clean, maintainable, and flexible system architecture.
 4. **Maintainability and Reusability**: Emphasizes modular and cohesive units for ease of maintenance and potential reusability in future projects.
 
+## Client Repository
+
+For the client application that interacts with SaturnService, please visit the following GitHub repository:
+
+[SaturnClient Repository](https://github.com/ergutierz/SaturnClient.git)
+
+
 ## Design and Implementation
 
 ### Message Queue Model
