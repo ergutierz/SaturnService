@@ -48,3 +48,6 @@ The system architecture is built around several key components:
 The class model, detailed using UML diagrams, outlines the relationships and dependencies between the various components of SaturnService. Similarly, the system model illustrates the flow of data from the external API through the message queue to the final processing and presentation stages.
 ## UML Diagram
 ![UML Diagram](./SaturnServiceUML.png)
+
+## System Model
+![System Model](./SaturnServiceSystemModel.png)
