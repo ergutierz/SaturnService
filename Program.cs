@@ -23,9 +23,12 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddMemoryCache();
         services.AddHttpClient();
-        services.AddScoped<TeamManager>();
-        services.AddScoped<ISportsService, SportsService>();
+        services.AddHostedService<QueueBackgroundService>();
+        services.AddSingleton<QueueManager<TeamManager.TeamTask>>();
+        services.AddSingleton<TeamManager>();
+        services.AddSingleton<ISportsService, SportsService>();
         services.AddControllers();
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen();

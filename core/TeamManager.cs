@@ -1,78 +1,74 @@
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace SaturnService;
 
-public class TeamManager(ISportsService sportsService)
+public class TeamManager
 {
-    public async Task<List<TeamStat>> ProcessAllTeamsDataAsync()
+    private readonly ISportsService _sportsService;
+    private readonly IMemoryCache _cache;
+    private readonly ILogger<TeamManager> _logger;
+
+    public TeamManager(ISportsService sportsService, IMemoryCache cache, ILogger<TeamManager> logger)
     {
-        var allTeamRecords = new List<TeamStat>();
-        var tasks = new List<Task>();
+        _sportsService = sportsService;
+        _cache = cache;
+        _logger = logger;
+    }
 
-        for (int teamNumber = 1; teamNumber <= 32; teamNumber++)
+    public async Task<List<TeamStat>> ProcessTeamDataAsync(int teamNumber, string correlationId)
+    {
+        var teamRecords = new List<TeamStat>();
+        _logger.LogInformation($"Starting processing for team number {teamNumber} with correlation ID {correlationId}.");
+        try
         {
-            int capturedTeamNumber = teamNumber;
-            tasks.Add(Task.Run(async () =>
+            string json = await _sportsService.FetchTeamDataAsync(teamNumber);
+            using (JsonDocument document = JsonDocument.Parse(json))
             {
-                try
+                JsonElement root = document.RootElement;
+                JsonElement matchUpStats = root.GetProperty("matchUpStats");
+
+                foreach (JsonElement match in matchUpStats.EnumerateArray())
                 {
-                    string json = await sportsService.FetchTeamDataAsync(capturedTeamNumber);
-                    using (JsonDocument document = JsonDocument.Parse(json))
+                    string gameDate = match.GetProperty("date").GetString();
+                    if (DateTime.TryParse(gameDate, out DateTime parsedDate))
                     {
-                        JsonElement root = document.RootElement;
-                        JsonElement matchUpStats = root.GetProperty("matchUpStats");
+                        var visTeamName = match.GetProperty("visTeamName");
+                        var visTeamCode = match.GetProperty("visStats").GetProperty("teamCode");
+                        var visScore = match.GetProperty("visStats").GetProperty("score");
+                        var homeTeamName = match.GetProperty("homeTeamName");
+                        var homeTeamCode = match.GetProperty("homeStats").GetProperty("teamCode");
+                        var homeScore = match.GetProperty("homeStats").GetProperty("score");
 
-                        foreach (JsonElement match in matchUpStats.EnumerateArray())
+                        teamRecords.Add(new TeamStat
                         {
-                            string gameDate = match.GetProperty("date").GetString();
-                            if (DateTime.TryParse(gameDate, out DateTime parsedDate) && parsedDate.Year == 2020)
-                            {
-                                string visTeamName = match.GetProperty("visTeamName").GetString();
-                                string visTeamCode = match.GetProperty("visStats").GetProperty("teamCode").ToString();
-                                int visScore = match.GetProperty("visStats").GetProperty("score").GetInt32();
-                                string homeTeamName = match.GetProperty("homeTeamName").GetString();
-                                string homeTeamCode = match.GetProperty("homeStats").GetProperty("teamCode").ToString();
-                                int homeScore = match.GetProperty("homeStats").GetProperty("score").GetInt32();
-                                
-                                lock (allTeamRecords)
-                                {
-                                    allTeamRecords.Add(new TeamStat
-                                    {
-                                        TeamName = visTeamName,
-                                        TeamNumber = visTeamCode,
-                                        TeamScore = visScore.ToString(),
-                                        GameDate = parsedDate
-                                    });
+                            TeamName = visTeamName.ToString(),
+                            TeamNumber = visTeamCode.ToString(),
+                            TeamScore = visScore.ToString(),
+                            GameDate = parsedDate
+                        });
 
-                                    allTeamRecords.Add(new TeamStat
-                                    {
-                                        TeamName = homeTeamName,
-                                        TeamNumber = homeTeamCode,
-                                        TeamScore = homeScore.ToString(),
-                                        GameDate = parsedDate
-                                    });
-                                }
-                            }
-                        }
+                        teamRecords.Add(new TeamStat
+                        {
+                            TeamName = homeTeamName.ToString(),
+                            TeamNumber = homeTeamCode.ToString(),
+                            TeamScore = homeScore.ToString(),
+                            GameDate = parsedDate
+                        });
                     }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"An error occurred processing team number {capturedTeamNumber}: {ex.Message}");
-                }
-            }));
+                _logger.LogInformation($"Successfully processed data for team number {teamNumber} with correlation ID {correlationId}.");
+            }
         }
-
-        await Task.WhenAll(tasks);
-
-        var distinctTeamRecords = allTeamRecords
-            .GroupBy(r => new { r.TeamNumber, r.GameDate })
-            .Select(g => g.First())
-            .ToList();
-
-        return distinctTeamRecords;
+        catch (Exception ex)
+        {
+            Console.WriteLine($"An error occurred processing team number {teamNumber}: {ex.Message}");
+            _logger.LogError(ex, $"An error occurred while processing team number {teamNumber} with correlation ID {correlationId}.");
+        }
+        _cache.Set(correlationId, teamRecords, TimeSpan.FromMinutes(5));
+        return teamRecords;
     }
-    
+
     public class TeamStat
     {
         public string TeamName { get; set; }
@@ -80,5 +76,10 @@ public class TeamManager(ISportsService sportsService)
         public string TeamScore { get; set; }
         public DateTime GameDate { get; set; }
     }
-
+    
+    public class TeamTask
+    {
+        public int TeamNumber { get; set; }
+        public string CorrelationId { get; set; }
+    }
 }
